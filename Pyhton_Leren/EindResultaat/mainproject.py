@@ -5,10 +5,22 @@ import cv2
 import mediapipe as mp
 import webbrowser
 
-camera = cv2.VideoCapture(0)
+# CAP_DSHOW helpt vaak tegen camera-problemen op Windows.
+# Werkt dit niet, probeer dan gewoon cv2.VideoCapture(0)
+camera = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+
+if not camera.isOpened():
+    print("FOUT: kan de camera niet openen. Check of een andere app de camera gebruikt,")
+    print("of probeer cv2.VideoCapture(0) zonder CAP_DSHOW.")
+    exit()
 
 mp_hands = mp.solutions.hands
-hands = mp_hands.Hands()
+hands = mp_hands.Hands(
+    static_image_mode=False,
+    max_num_hands=2,
+    min_detection_confidence=0.5,
+    min_tracking_confidence=0.5
+)
 
 draw = mp.solutions.drawing_utils
 
@@ -16,6 +28,12 @@ opened = False
 
 while True:
     succes, frame = camera.read()
+
+    # Belangrijk: als het lezen mislukt, sla dit frame gewoon over
+    # in plaats van te crashen op een lege frame.
+    if not succes or frame is None:
+        print("Geen frame ontvangen van de camera, probeer opnieuw...")
+        continue
 
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 

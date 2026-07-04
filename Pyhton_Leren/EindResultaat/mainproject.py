@@ -4,40 +4,37 @@
 import cv2
 import mediapipe as mp
 import webbrowser
+import time
 
-# CAP_DSHOW helpt vaak tegen camera-problemen op Windows.
-# Werkt dit niet, probeer dan gewoon cv2.VideoCapture(0)
+# CAP_DSHOW hulp middel voor mijn windows camera als er een probleem is.
 camera = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 
 if not camera.isOpened():
-    print("FOUT: kan de camera niet openen. Check of een andere app de camera gebruikt,")
-    print("of probeer cv2.VideoCapture(0) zonder CAP_DSHOW.")
+    print("FOUT: kan de camera niet openen.")
     exit()
 
 mp_hands = mp.solutions.hands
-hands = mp_hands.Hands(
-    static_image_mode=False,
-    max_num_hands=2,
-    min_detection_confidence=0.5,
-    min_tracking_confidence=0.5
-)
+hands = mp_hands.Hands()
 
 draw = mp.solutions.drawing_utils
 
-opened = False
+# Hoeveel seconden wachten voordat hetzelfde gebaar opnieuw een actie mag
+# uitvoeren. Zonder dit zou hij 30x per seconde een nieuw tabblad openen
+# zolang ik me hand omhoog hou
+WACHTTIJD = 5.0
+laatste_actie_tijd = 0
 
 while True:
     succes, frame = camera.read()
 
-    # Belangrijk: als het lezen mislukt, sla dit frame gewoon over
-    # in plaats van te crashen op een lege frame.
     if not succes or frame is None:
-        print("Geen frame ontvangen van de camera, probeer opnieuw...")
         continue
 
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
     result = hands.process(rgb)
+
+    gebaar_dit_frame = None
 
     if result.multi_hand_landmarks:
 
@@ -49,12 +46,37 @@ while True:
 
             wijsvinger = punten[8]
             middelvinger = punten[12]
+            ringvinger = punten[16]
+            pink = punten[20]
 
-            if wijsvinger.y < punten[6].y and middelvinger.y < punten[10].y:
+            wijs_omhoog = wijsvinger.y < punten[6].y
+            middel_omhoog = middelvinger.y < punten[10].y
+            ring_omhoog = ringvinger.y < punten[14].y
+            pink_omhoog = pink.y < punten[18].y
 
-                if opened == False:
-                    webbrowser.open("https://youtube.com")
-                    opened = True
+            if wijs_omhoog and middel_omhoog and not ring_omhoog and not pink_omhoog:
+                gebaar_dit_frame = "youtube"
+
+            elif pink_omhoog:
+                gebaar_dit_frame = "google"
+
+    # Voer de actie uit zolang het gebaar gezien wordt, maar niet vaker
+    # dan 1x per WACHTTIJD seconden.
+    nu = time.time()
+    if gebaar_dit_frame and (nu - laatste_actie_tijd) > WACHTTIJD:
+
+        if gebaar_dit_frame == "youtube":
+            webbrowser.open("https://youtube.com")
+
+        elif gebaar_dit_frame == "google":
+            webbrowser.open("https://google.com")
+
+        laatste_actie_tijd = nu
+
+    # Laat op het scherm zien wat er open gaat / Tekst
+    if gebaar_dit_frame:
+        cv2.putText(frame, gebaar_dit_frame, (10, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
     cv2.imshow("Project", frame)
 
